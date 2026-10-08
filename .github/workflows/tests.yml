@@ -1,4 +1,5 @@
-# Unit tests on Linux, with real sandbox containers, on every push and pull request.
+# Ruff (including S rules), pyright, then pytest with coverage, on every push and pull request.
+# The installed wheel is checked to carry the same licence. Sandbox tests use a real container.
 # No secrets: the three live Jev tests skip without OPENROUTER_API_KEY.
 name: tests
 on:
@@ -9,24 +10,32 @@ on:
 permissions:
   contents: read
 jobs:
-  unittest:
+  check:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.13"
-      - name: Install Golem (pinned SDK)
-        run: pip install .
+      - name: Install Golem and the dev group
+        run: uv sync --no-editable
       - name: The installed package carries the same licence
         run: |
+          # uv run re-syncs as editable by default; call the wheel entry point directly.
           cd "$RUNNER_TEMP"
-          golem licence | tail -1
-          test "$(golem licence | tail -1 | cut -d' ' -f2)" = "$(sha256sum "$GITHUB_WORKSPACE/authority.json" | cut -d' ' -f1)"
+          "$GITHUB_WORKSPACE/.venv/bin/golem" licence | tail -1
+          test "$("$GITHUB_WORKSPACE/.venv/bin/golem" licence | tail -1 | cut -d' ' -f2)" = "$(sha256sum "$GITHUB_WORKSPACE/authority.json" | cut -d' ' -f1)"
+      - name: Ruff
+        run: uv run --no-sync ruff check golem tests scripts
+      - name: Pyright
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pyright
       - name: Pull the sandbox image
+        if: ${{ !cancelled() }}
         run: docker pull python:3.12-slim
-      - name: Tests
-        run: python -m unittest discover -s tests -v
+      - name: Pytest
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest --cov=golem --cov-report=term-missing
