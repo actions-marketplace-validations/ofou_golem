@@ -152,6 +152,8 @@ class Sandbox:
             mounts.append((self.snapshot_dir.resolve(), "/repo"))
         if access == "registry-read" and self.registry_export is not None:
             mounts.append((Path(self.registry_export).resolve(), "/registry"))
+        for host, _inside in mounts:
+            _readable_by_sandbox(host, files=(host == mounts[0][0]))
         cmd = [
             "docker",
             "run",
@@ -266,3 +268,19 @@ def _parse_tests(output: str, code: int, seconds: float, command: str) -> TestRe
 def _last_line(text: str) -> str:
     lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
     return lines[-1][:400] if lines else ""
+
+
+def _readable_by_sandbox(path: Path, files: bool = False) -> None:
+    """The sandbox runs as uid 65534, so every directory Golem mounts needs read and search
+    permission for others, and the tool bundle's files need read. tempfile makes 0700
+    directories, which Docker Desktop ignores and Linux enforces ("No module named 'tool'").
+    Only Golem's own copies are mounted: bundles, the snapshot, the export, the runners."""
+    if not path.is_dir():
+        return
+    mode = path.stat().st_mode
+    if mode & 0o005 != 0o005:
+        path.chmod(mode | 0o055)
+    if files:
+        for item in path.iterdir():
+            if item.is_file() and not item.stat().st_mode & 0o004:
+                item.chmod(item.stat().st_mode | 0o044)
