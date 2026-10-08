@@ -4,13 +4,18 @@ version = "2026.10.08"
 description = "An agent that builds, tests, and keeps its own tools inside a frozen licence."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["openrouter-agent-sdk", "openrouter"]
+dependencies = ["openrouter-agent-sdk==0.8.0", "openrouter==1.1.26"]  # newer openrouter drops names the SDK imports
 
 [project.scripts]
 golem = "golem.cli:main"
 
 [dependency-groups]
-dev = ["pytest"]
+dev = [
+    "pyright>=1.1.414",
+    "pytest",
+    "pytest-cov>=7.1.0",
+    "ruff",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -19,5 +24,24 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["golem"]
 
+# The default licence ships inside the package, byte for byte, so `pip install` gets the same sha256.
+[tool.hatch.build.targets.wheel.force-include]
+"authority.json" = "golem/authority.json"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+src = ["golem", "tests", "scripts"]
+extend-exclude = ["evidence", ".golem"]
+
+[tool.ruff.lint]
+extend-select = ["S"]
+
+[tool.pyright]
+include = ["golem", "tests", "scripts"]
+exclude = ["evidence", ".golem"]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"

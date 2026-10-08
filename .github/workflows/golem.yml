@@ -1,0 +1,144 @@
+# Run Golem on a public repository at a pinned commit, from the Actions tab or
+#   gh workflow run golem.yml -f target=OWNER/REPO -f ref=SHA -f task="..." [-f task2="..."]
+#
+# Two jobs on GitHub-hosted runners (fresh VMs, thrown away after the job):
+#   run     holds OPENROUTER_API_KEY. Golem builds, tests and installs tools; generated code
+#           runs only in its sandbox containers (no network, no environment, read-only).
+#   verify  holds no secret at all. It downloads the registry the first job produced and
+#           re-runs every installed tool's own and blind tests in the sandbox, so the public
+#           log shows the tools pass on a host that never held the key.
+# Only people with write access to this repository can dispatch it; fork pull requests cannot.
+name: golem
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "public GitHub repository, OWNER/REPO"
+        required: true
+        type: string
+      ref:
+        description: "commit SHA (or branch) of the target"
+        required: true
+        type: string
+      task:
+        description: "the task"
+        required: true
+        type: string
+      task2:
+        description: "optional second task, run by a new process on the same registry"
+        required: false
+        type: string
+permissions: {}
+concurrency:
+  group: golem
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      TARGET: ${{ inputs.target }}
+      REF: ${{ inputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Clone the target at the given ref (public, no token)
+        run: |
+          [[ "$TARGET" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo "target must be OWNER/REPO"; exit 1; }
+          [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "ref has unexpected characters"; exit 1; }
+          git init -q "$RUNNER_TEMP/target"
+          git -C "$RUNNER_TEMP/target" fetch -q --depth 1 "https://github.com/$TARGET" "$REF"
+          git -C "$RUNNER_TEMP/target" checkout -q FETCH_HEAD
+          echo "target $TARGET at $(git -C "$RUNNER_TEMP/target" rev-parse HEAD)"
+      - name: Build Golem's image
+        run: |
+          docker build -q -t golem:local .
+          docker pull -q python:3.12-slim
+      - name: Golem
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TASK: ${{ inputs.task }}
+          TASK2: ${{ inputs.task2 }}
+        run: |
+          set -o pipefail
+          [ -n "$OPENROUTER_API_KEY" ] || { echo "Add the repository secret OPENROUTER_API_KEY first"; exit 1; }
+          # No `credits` here: this log is public and the balance is the account owner's business.
+          t="$RUNNER_TEMP/target"
+          scripts/golem-docker "$t" run "$TASK" | tee "$RUNNER_TEMP/session-1.log"
+          if [ -n "$TASK2" ]; then
+            scripts/golem-docker "$t" run "$TASK2" | tee "$RUNNER_TEMP/session-2.log"
+          fi
+          scripts/golem-docker "$t" registry | tee "$RUNNER_TEMP/registry.txt"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Golem on \`$TARGET\` at \`$REF\`"
+            echo '```'
+            cat "$RUNNER_TEMP/registry.txt" 2>/dev/null || echo "no registry listing"
+            echo '```'
+            for log in "$RUNNER_TEMP"/session-*.log; do
+              [ -f "$log" ] || continue
+              echo "#### $(basename "$log")"
+              echo '```'
+              grep -E '^\[(licence|session|create|jev|verdict|install|respawn|call|spend|refused)\]' "$log" | cut -c1-240
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Collect the registry and logs
+        if: always()
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/target/.golem" 2>/dev/null || true
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$RUNNER_TEMP"/session-*.log "$RUNNER_TEMP/out/" 2>/dev/null || true
+          if [ -d "$RUNNER_TEMP/target/.golem" ]; then
+            rm -rf "$RUNNER_TEMP/target/.golem/work"
+            cp -R "$RUNNER_TEMP/target/.golem" "$RUNNER_TEMP/out/golem"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: golem-run
+          path: ${{ runner.temp }}/out
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  verify:
+    needs: run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TARGET: ${{ inputs.target }}
+      REF: ${{ inputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Clone the same target (public, no token)
+        run: |
+          [[ "$TARGET" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || exit 1
+          [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]] || exit 1
+          git init -q "$RUNNER_TEMP/target"
+          git -C "$RUNNER_TEMP/target" fetch -q --depth 1 "https://github.com/$TARGET" "$REF"
+          git -C "$RUNNER_TEMP/target" checkout -q FETCH_HEAD
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: golem-run
+          path: ${{ runner.temp }}/in
+      - name: Re-run every installed tool's tests in the sandbox, with no key on this host
+        run: |
+          [ -d "$RUNNER_TEMP/in/golem" ] || { echo "the run produced no registry"; exit 0; }
+          cp -R "$RUNNER_TEMP/in/golem" "$RUNNER_TEMP/target/.golem"
+          docker build -q -t golem:local .
+          set -o pipefail
+          scripts/golem-docker "$RUNNER_TEMP/target" verify | tee "$RUNNER_TEMP/verify.txt"
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### verify (no secrets in this job)"; echo '```'; cat "$RUNNER_TEMP/verify.txt" 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

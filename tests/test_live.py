@@ -1,42 +1,92 @@
-"""Live checks against OpenRouter. Skipped unless OPENROUTER_API_KEY is set. Each costs well under a cent."""
+"""Live checks against OpenRouter. Skipped unless OPENROUTER_API_KEY is set. Each costs well under a cent.
+The full threshold evals are scripts/jev_evals.py."""
 
 import os
 import unittest
 
 from golem import jev
 
-KEY = os.environ.get("OPENROUTER_API_KEY")
+KEY = os.environ.get("OPENROUTER_API_KEY") or ""
+MODEL = "typesafe/jev-1.13"
 TASK = "CI run 37533646169 failed. From the attached job logs, list every failing test and the job it failed in."
+QUOTE = "list every failing test and the job it failed in"
+
+
+def proposal(name, description, outputs):
+    return {
+        "name": name,
+        "access": "pure",
+        "description": description,
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "log file"}},
+        },
+        "output_schema": {"type": "object", "properties": outputs},
+        "gap": {"task_quote": QUOTE},
+    }
+
+
+PARSER = proposal(
+    "parse_ci_log",
+    "Extract failing pytest test ids, with the job name, from a raw GitHub Actions job log.",
+    {
+        "failures": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "pytest node ids of failing tests, deduplicated",
+        }
+    },
+)
 
 
 @unittest.skipUnless(KEY, "OPENROUTER_API_KEY is not set")
 class JevLiveTest(unittest.TestCase):
-    def test_decisions_endpoint_returns_calibrated_answers(self):
-        proposal = {"name": "parse_ci_log", "description": "Extract failing pytest test ids from a raw GitHub Actions job log.", "access": "pure", "gap": {}}
-        installed = [{"name": "count_lines", "description": "Count lines in a text file."}]
-        advice = jev.advise_gap(KEY, "typesafe/jev-1.13", TASK, proposal, installed)
-        self.assertEqual(advice.error, "", advice.line())
-        self.assertTrue(advice.model.startswith("typesafe/jev-1.13"), advice.model)
-        self.assertEqual(set(advice.probabilities), {"needed", "covered"})
-        for value in advice.probabilities.values():
-            self.assertGreaterEqual(value, 0.0)
-            self.assertLessEqual(value, 1.0)
-        self.assertLess(advice.probabilities["covered"], jev.COVERED_ABOVE, advice.line())
-        self.assertTrue(advice.request_id.startswith("gen-dec-"), advice.request_id)
-        print("\n" + advice.line())
+    def test_gate_answers_every_question_and_lets_a_real_parser_build(self):
+        state, questions = jev.gate_request(
+            TASK,
+            PARSER,
+            [
+                {
+                    "name": "count_lines",
+                    "access": "pure",
+                    "description": "Count lines in a text file.",
+                }
+            ],
+            new_interface=True,
+        )
+        reply = jev.ask(KEY, MODEL, state, questions, session_id="golem-live-test")
+        self.assertTrue(reply.ok, reply.error)
+        self.assertEqual(
+            set(reply.probs), {"exact_op", "same_job::count_lines", "clear::failures"}
+        )
+        self.assertTrue(reply.request_id.startswith("gen-dec-"), reply.request_id)
+        verdict = jev.judge_gate(reply)
+        self.assertEqual(verdict.acting, [], reply.record())
+        print("\n", reply.record())
 
-    def test_an_installed_tool_that_does_the_job_reads_as_covered(self):
-        proposal = {"name": "parse_ci_log_again", "description": "Extract failing pytest test ids from a raw GitHub Actions job log.", "access": "pure", "gap": {}}
-        installed = [{"name": "parse_ci_log", "description": "Extract failing pytest test ids, with file and job, from a raw GitHub Actions job log (handles ANSI colour codes and timestamps)."}]
-        advice = jev.advise_gap(KEY, "typesafe/jev-1.13", TASK, proposal, installed)
-        self.assertEqual(advice.error, "", advice.line())
-        print("\n" + advice.line())
-        self.assertGreater(advice.probabilities["covered"], 0.5, advice.line())
+    def test_a_vague_output_field_is_sent_back(self):
+        vague = proposal(
+            "parse_ci_log",
+            PARSER["description"],
+            {"info": {"type": "string", "description": "information from the log"}},
+        )
+        state, questions = jev.gate_request(TASK, vague, [], new_interface=True)
+        reply = jev.ask(KEY, MODEL, state, questions)
+        self.assertTrue(reply.ok, reply.error)
+        self.assertTrue(
+            any(
+                check.startswith("clear::info")
+                for check in jev.judge_gate(reply).acting
+            ),
+            reply.record(),
+        )
 
-    def test_a_bad_key_means_no_advice_not_a_crash(self):
-        advice = jev.advise_gap("sk-or-v1-invalid", "typesafe/jev-1.13", TASK, {"name": "x", "description": "y", "access": "pure"}, [])
-        self.assertFalse(advice.defer)
-        self.assertIn("HTTP 401", advice.error)
+    def test_a_bad_key_means_no_answer_not_a_crash(self):
+        state, questions = jev.gate_request(TASK, PARSER, [], new_interface=False)
+        reply = jev.ask("sk-or-v1-invalid", MODEL, state, questions)
+        self.assertFalse(reply.ok)
+        self.assertIn("HTTP 401", reply.error)
+        self.assertEqual(jev.judge_gate(reply).acting, [])
 
 
 if __name__ == "__main__":

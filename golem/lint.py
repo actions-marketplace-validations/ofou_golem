@@ -15,17 +15,37 @@ from __future__ import annotations
 import ast
 import fnmatch
 
+WRITE_CALLS = (
+    "os.remove",
+    "os.unlink",
+    "os.rmdir",
+    "os.removedirs",
+    "os.rename",
+    "os.replace",
+    "os.truncate",
+    "shutil.rmtree",
+    "shutil.move",
+    "shutil.copy*",
+    "pathlib.Path.unlink",
+    "*.write_text",
+    "*.write_bytes",
+    "*.unlink",
+    "*.rmdir",
+)
 
-WRITE_CALLS = ("os.remove", "os.unlink", "os.rmdir", "os.removedirs", "os.rename", "os.replace", "os.truncate",
-               "shutil.rmtree", "shutil.move", "shutil.copy*", "pathlib.Path.unlink", "*.write_text", "*.write_bytes",
-               "*.unlink", "*.rmdir")
 
-
-def scan(source: str, forbidden_imports: list[str], forbidden_calls: list[str], for_tests: bool = False) -> list[str]:
+def scan(
+    source: str,
+    forbidden_imports: list[str],
+    forbidden_calls: list[str],
+    for_tests: bool = False,
+) -> list[str]:
     """Privilege requests in source. Tests may write fixture files: inside the sandbox
     only /tmp is writable, so filesystem writes are left to the sandbox for test files."""
     if for_tests:
-        forbidden_calls = [pattern for pattern in forbidden_calls if pattern not in WRITE_CALLS]
+        forbidden_calls = [
+            pattern for pattern in forbidden_calls if pattern not in WRITE_CALLS
+        ]
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
@@ -44,7 +64,9 @@ def scan(source: str, forbidden_imports: list[str], forbidden_calls: list[str], 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                aliases[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
+                aliases[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
                 if module_banned(alias.name):
                     add(f"new authority: imports {alias.name}")
         elif isinstance(node, ast.ImportFrom) and node.module:
@@ -56,11 +78,22 @@ def scan(source: str, forbidden_imports: list[str], forbidden_calls: list[str], 
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             dotted = _dotted(node.func, aliases)
-            if dotted and any(fnmatch.fnmatchcase(dotted, pattern) for pattern in forbidden_calls):
+            if dotted and any(
+                fnmatch.fnmatchcase(dotted, pattern) for pattern in forbidden_calls
+            ):
                 add(f"new authority: calls {dotted}()")
-            if not for_tests and dotted in ("open", "io.open", "builtins.open") and _opens_for_writing(node):
+            if (
+                not for_tests
+                and dotted in ("open", "io.open", "builtins.open")
+                and _opens_for_writing(node)
+            ):
                 add("new authority: opens a file for writing")
-        elif isinstance(node, ast.Attribute) and node.attr in {"environ", "getenv", "putenv", "environb"}:
+        elif isinstance(node, ast.Attribute) and node.attr in {
+            "environ",
+            "getenv",
+            "putenv",
+            "environb",
+        }:
             add(f"new authority: reads the environment ({node.attr})")
     return found
 

@@ -8,7 +8,13 @@ import json
 import tempfile
 from pathlib import Path
 
-from openrouter_agent import HooksManager, OpenRouter, call_model, max_cost, step_count_is
+from openrouter_agent import (
+    HooksManager,
+    OpenRouter,
+    call_model,
+    max_cost,
+    step_count_is,
+)
 from openrouter_agent.hooks_types import HookEntry
 
 from golem import kernel, snapshot
@@ -21,7 +27,7 @@ FALLBACK_USD_PER_INPUT_TOKEN = 5 / 1_000_000
 FALLBACK_USD_PER_OUTPUT_TOKEN = 25 / 1_000_000
 FALLBACK_MIN_USD_PER_CALL = 0.05
 
-INSTRUCTIONS ="""You are Golem, an agent working inside one software repository. You answer the task with evidence.
+INSTRUCTIONS = """You are Golem, an agent working inside one software repository. You answer the task with evidence.
 
 How you work:
 - Read files with list_files and read_file. Attachments are under _inputs/.
@@ -45,7 +51,9 @@ How you work:
   Never present a number or fact you did not read or compute with a tool."""
 
 
-def build_run(repo: Path, task: str, licence: Licence, api_key: str, attachments: list[Path]) -> kernel.Run:
+def build_run(
+    repo: Path, task: str, licence: Licence, api_key: str, attachments: list[Path]
+) -> kernel.Run:
     repo = Path(repo).resolve()
     golem_dir = repo / ".golem"
     registry = Registry(golem_dir)
@@ -54,9 +62,17 @@ def build_run(repo: Path, task: str, licence: Licence, api_key: str, attachments
     files = snapshot.build(repo, snap_dir, attachments)
     export_dir = registry.export(work / "registry")
     run = kernel.Run(
-        repo=repo, task=task, licence=licence, registry=registry,
-        sandbox=Sandbox(licence, snap_dir, export_dir), snapshot_dir=snap_dir, files=files,
-        api_key=api_key, client=OpenRouter(api_key=api_key), hooks=None, run_dir=golem_dir / "runs",
+        repo=repo,
+        task=task,
+        licence=licence,
+        registry=registry,
+        sandbox=Sandbox(licence, snap_dir, export_dir),
+        snapshot_dir=snap_dir,
+        files=files,
+        api_key=api_key,
+        client=OpenRouter(api_key=api_key),
+        hooks=None,
+        run_dir=golem_dir / "runs",
     )
     run.run_dir = golem_dir / "runs" / run.run_id
     run.hooks = _spend_hooks(run, "builder")
@@ -72,7 +88,10 @@ def _spend_hooks(run: kernel.Run, role: str) -> HooksManager:
         cost = usage.get("cost")
         if cost is None:
             # No cost reported: charge a deliberately high estimate so the cap still binds.
-            cost = usage.get("input_tokens", 0) * FALLBACK_USD_PER_INPUT_TOKEN + usage.get("output_tokens", 0) * FALLBACK_USD_PER_OUTPUT_TOKEN
+            cost = (
+                usage.get("input_tokens", 0) * FALLBACK_USD_PER_INPUT_TOKEN
+                + usage.get("output_tokens", 0) * FALLBACK_USD_PER_OUTPUT_TOKEN
+            )
             cost = max(cost, FALLBACK_MIN_USD_PER_CALL)
         model = payload.get("model") or "unknown"
         run.models_by_role.setdefault(role, set()).add(model)
@@ -87,27 +106,47 @@ async def run_task(run: kernel.Run) -> str:
     licence = run.licence
     run.say("licence", f"{licence.data['name']} sha256 {licence.sha256}")
     active = run.registry.active()
-    run.say("registry", "before: " + (", ".join(f"{name}@{version}" for name, version in sorted(active.items())) or "empty"))
+    run.say(
+        "registry",
+        "before: "
+        + (
+            ", ".join(f"{name}@{version}" for name, version in sorted(active.items()))
+            or "empty"
+        ),
+    )
     run.say("task", run.task)
 
     handoff, answer = "", ""
     sessions = licence.budget("max_sessions_per_task")
     for session in range(1, sessions + 1):
         run.installed_now.clear()
-        tools = kernel.read_tools(run) + [kernel.make_tool_tool(run), kernel.install_tool_tool(run)] + kernel.installed_tools(run)
+        tools = (
+            kernel.read_tools(run)
+            + [kernel.make_tool_tool(run), kernel.install_tool_tool(run)]
+            + kernel.installed_tools(run)
+        )
         loaded = [name for name in run.registry.active()]
-        run.say("session", f"{session}/{sessions} starts fresh; loads {len(loaded)} installed tool(s): {', '.join(loaded) or 'none'}")
+        run.say(
+            "session",
+            f"{session}/{sessions} starts fresh; loads {len(loaded)} installed tool(s): {', '.join(loaded) or 'none'}",
+        )
         remaining = max(licence.budget("max_usd_per_task") - run.spent, 0.01)
-        prompt = run.task if not handoff else f"{run.task}\n\nHandoff from the previous session:\n{handoff}"
+        prompt = (
+            run.task
+            if not handoff
+            else f"{run.task}\n\nHandoff from the previous session:\n{handoff}"
+        )
         request = {
             "model": licence.model("builder"),
             "instructions": INSTRUCTIONS + "\n\nInstalled tools:\n" + _listing(run),
             "input": prompt,
             "tools": tools,
             "stop_when": [
-                step_count_is(min(licence.budget("max_steps_per_session"), SDK_TURN_LIMIT - 2)),
+                step_count_is(
+                    min(licence.budget("max_steps_per_session"), SDK_TURN_LIMIT - 2)
+                ),
                 max_cost(remaining),
-                lambda _options: run.over_budget(),
+                lambda _options: run.next_step_may_overrun(),
                 lambda _options: bool(run.installed_now),
             ],
             "hooks": run.hooks,
@@ -118,20 +157,42 @@ async def run_task(run: kernel.Run) -> str:
         try:
             text = await result.get_text()
         except RuntimeError as exc:
-            # The SDK stops a call_model run after a fixed number of turns. Treat it as the session's end.
+            # The SDK raises when it stops a run (its turn limit, or "Response failed"). Treat it as the session's end.
             run.say("session", f"{session}/{sessions} stopped by the SDK: {exc}")
-            text = "The session ran out of turns before a final answer."
+            text = f"The session ended before a final answer: {exc}"
         if run.installed_now and session < sessions and not run.over_budget():
             handoff = text.strip()[:3000]
-            run.say("respawn", f"installed {', '.join(run.installed_now)}; starting a fresh session")
+            run.say(
+                "respawn",
+                f"installed {', '.join(run.installed_now)}; starting a fresh session",
+            )
             continue
-        answer = text.strip()
+        answer = text.strip() or "The session ended without an answer."
         break
 
-    run.say("models", "; ".join(f"{role}: {', '.join(sorted(models))}" for role, models in sorted(run.models_by_role.items())))
+    run.say(
+        "models",
+        "; ".join(
+            f"{role}: {', '.join(sorted(models))}"
+            for role, models in sorted(run.models_by_role.items())
+        ),
+    )
     run.say("spend", f"${run.spent:.4f} of ${licence.budget('max_usd_per_task')} cap")
-    run.say("registry", "after: " + (", ".join(f"{name}@{version}" for name, version in sorted(run.registry.active().items())) or "empty"))
-    run.say("licence", f"sha256 {licence.sha256} {'unchanged' if unchanged(licence) else 'CHANGED'}")
+    run.say(
+        "registry",
+        "after: "
+        + (
+            ", ".join(
+                f"{name}@{version}"
+                for name, version in sorted(run.registry.active().items())
+            )
+            or "empty"
+        ),
+    )
+    run.say(
+        "licence",
+        f"sha256 {licence.sha256} {'unchanged' if unchanged(licence) else 'CHANGED'}",
+    )
     run.run_dir.mkdir(parents=True, exist_ok=True)
     (run.run_dir / "result.md").write_text(answer + "\n", encoding="utf-8")
     return answer
@@ -141,4 +202,9 @@ def _listing(run: kernel.Run) -> str:
     rows = run.registry.listing()
     if not rows:
         return "(none yet)"
-    return "\n".join(json.dumps({key: row[key] for key in ("name", "version", "access", "description")}) for row in rows)
+    return "\n".join(
+        json.dumps(
+            {key: row[key] for key in ("name", "version", "access", "description")}
+        )
+        for row in rows
+    )

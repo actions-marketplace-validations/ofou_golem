@@ -10,9 +10,21 @@ promises is one Golem can actually check.
 from __future__ import annotations
 
 ALLOWED_KEYWORDS = {
-    "type", "properties", "required", "additionalProperties", "items", "enum",
-    "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "description",
-    "default", "title",  # annotations: accepted, never enforced
+    "type",
+    "properties",
+    "required",
+    "additionalProperties",
+    "items",
+    "enum",
+    "minimum",
+    "maximum",
+    "minLength",
+    "maxLength",
+    "minItems",
+    "maxItems",
+    "description",
+    "default",
+    "title",  # annotations: accepted, never enforced
 }
 TYPES = {"object", "array", "string", "integer", "number", "boolean", "null"}
 
@@ -22,8 +34,14 @@ def check_schema(schema: object, where: str = "schema", depth: int = 0) -> list[
     if depth > 6:
         return [f"{where}: nested deeper than 6 levels"]
     if not isinstance(schema, dict):
-        return [f"{where}: must be an object"]
-    problems = [f"{where}: unsupported keyword {key!r}" for key in schema if key not in ALLOWED_KEYWORDS]
+        return [
+            f"{where}: must be a JSON Schema object, got {type(schema).__name__} {str(schema)[:60]!r}"
+        ]
+    problems = [
+        f"{where}: unsupported keyword {key!r}"
+        for key in schema
+        if key not in ALLOWED_KEYWORDS
+    ]
     kind = schema.get("type")
     kinds = kind if isinstance(kind, list) else [kind]
     if kind is None or any(item not in TYPES for item in kinds):
@@ -36,7 +54,9 @@ def check_schema(schema: object, where: str = "schema", depth: int = 0) -> list[
     if isinstance(extra, dict):
         problems += check_schema(extra, f"{where}.*", depth + 1)
     elif extra is not None and not isinstance(extra, bool):
-        problems.append(f"{where}: additionalProperties must be true, false, or a schema")
+        problems.append(
+            f"{where}: additionalProperties must be true, false, or a schema"
+        )
     return problems
 
 

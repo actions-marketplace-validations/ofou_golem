@@ -12,8 +12,31 @@ import shutil
 import subprocess
 from pathlib import Path
 
-SKIP_DIRS = {".git", ".golem", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build"}
-SKIP_PATTERNS = (".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.p12", "*.pfx", ".npmrc", ".pypirc", ".netrc")
+SKIP_DIRS = {
+    ".git",
+    ".golem",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+}
+SKIP_PATTERNS = (
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "id_rsa*",
+    "id_ed25519*",
+    "*.p12",
+    "*.pfx",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+)
 KEEP = (".env.example", ".env.sample", ".env.template", ".env.dist")
 MAX_FILE_BYTES = 1_000_000
 INPUTS = "_inputs"
@@ -27,7 +50,11 @@ def build(repo: Path, dest: Path, attachments: list[Path] | None = None) -> list
         if _skipped(rel):
             continue
         source = repo / rel
-        if not source.is_file() or source.is_symlink() or source.stat().st_size > MAX_FILE_BYTES:
+        if (
+            not source.is_file()
+            or source.is_symlink()
+            or source.stat().st_size > MAX_FILE_BYTES
+        ):
             continue
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -45,8 +72,18 @@ def build(repo: Path, dest: Path, attachments: list[Path] | None = None) -> list
 def _candidate_files(repo: Path) -> list[str]:
     try:
         out = subprocess.run(
-            ["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"],
-            capture_output=True, text=True, check=True,
+            [
+                "git",
+                "-C",
+                str(repo),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
         files = [line for line in out.splitlines() if line]
         if files:

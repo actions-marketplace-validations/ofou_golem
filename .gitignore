@@ -10,3 +10,5 @@ dist/
 uv.lock
 evidence/
 .golem
+.ruff_cache
+.coverage

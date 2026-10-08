@@ -11,7 +11,16 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-REQUIRED = ("name", "shapes", "access", "forbidden_imports", "forbidden_calls", "sandbox", "budget", "models")
+REQUIRED = (
+    "name",
+    "shapes",
+    "access",
+    "forbidden_imports",
+    "forbidden_calls",
+    "sandbox",
+    "budget",
+    "models",
+)
 
 
 @dataclass(frozen=True)
@@ -34,7 +43,11 @@ class Licence:
 def load(path: Path) -> Licence:
     """Read the licence. Whole-line // comments are allowed; the sha256 covers the raw bytes, comments included."""
     raw = Path(path).read_bytes()
-    text = "\n".join(line for line in raw.decode("utf-8").splitlines() if not line.lstrip().startswith("//"))
+    text = "\n".join(
+        line
+        for line in raw.decode("utf-8").splitlines()
+        if not line.lstrip().startswith("//")
+    )
     data = json.loads(text)
     missing = [key for key in REQUIRED if key not in data]
     if missing:
@@ -51,8 +64,12 @@ def violations(manifest: dict, licence: Licence) -> list[str]:
     found: list[str] = []
     shape = manifest.get("shape")
     if shape not in licence.data["shapes"]:
-        found.append(f"new authority: shape {shape!r} is outside the licence {licence.data['shapes']}")
+        found.append(
+            f"new authority: shape {shape!r} is outside the licence {licence.data['shapes']}"
+        )
     access = manifest.get("access")
     if access not in licence.data["access"]:
-        found.append(f"new authority: access {access!r} is outside the licence {licence.data['access']}")
+        found.append(
+            f"new authority: access {access!r} is outside the licence {licence.data['access']}"
+        )
     return found

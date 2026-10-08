@@ -13,12 +13,20 @@ def main() -> None:
     sys.path.insert(0, "/tool")
     try:
         args = json.loads(sys.stdin.read() or "{}")
-        import tool  # noqa: E402  (the generated module)
+        import tool
 
         result = tool.run(args)
-        print(MARK + json.dumps({"ok": True, "result": result}, ensure_ascii=False, default=str))
+        print(
+            MARK
+            + json.dumps(
+                {"ok": True, "result": result}, ensure_ascii=False, default=str
+            )
+        )
     except BaseException as exc:  # report every failure as data
-        print(MARK + json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"[:2000]}))
+        print(
+            MARK
+            + json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"[:2000]})
+        )
 
 
 if __name__ == "__main__":

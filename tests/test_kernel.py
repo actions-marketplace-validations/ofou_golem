@@ -21,29 +21,47 @@ class LicenceTest(unittest.TestCase):
         self.assertTrue(licence.unchanged(LICENCE))
 
     def test_access_outside_licence_is_new_authority(self):
-        found = licence.violations({"shape": "function", "access": "network-read"}, LICENCE)
+        found = licence.violations(
+            {"shape": "function", "access": "network-read"}, LICENCE
+        )
         self.assertTrue(any("new authority" in item for item in found))
-        self.assertEqual(licence.violations({"shape": "function", "access": "pure"}, LICENCE), [])
+        self.assertEqual(
+            licence.violations({"shape": "function", "access": "pure"}, LICENCE), []
+        )
 
 
 class LintTest(unittest.TestCase):
     def scan(self, source):
-        return lint.scan(source, LICENCE.data["forbidden_imports"], LICENCE.data["forbidden_calls"])
+        return lint.scan(
+            source, LICENCE.data["forbidden_imports"], LICENCE.data["forbidden_calls"]
+        )
 
     def test_network_subprocess_eval_env_and_writes_are_named(self):
-        found = " | ".join(self.scan(
-            "import socket\nfrom urllib import request\nimport subprocess\nimport os\n"
-            "eval('1')\nos.environ['X']\nopen('f', 'w')\n"
-        ))
+        found = " | ".join(
+            self.scan(
+                "import socket\nfrom urllib import request\nimport subprocess\nimport os\n"
+                "eval('1')\nos.environ['X']\nopen('f', 'w')\n"
+            )
+        )
         for word in ("socket", "urllib", "subprocess", "eval", "environ", "writing"):
             self.assertIn(word, found)
 
     def test_plain_reader_is_clean(self):
-        self.assertEqual(self.scan("import os, re, json\ndef run(a):\n    return {'n': len(open('/repo/x').read())}\n"), [])
+        self.assertEqual(
+            self.scan(
+                "import os, re, json\ndef run(a):\n    return {'n': len(open('/repo/x').read())}\n"
+            ),
+            [],
+        )
 
     def test_tests_may_write_fixtures_but_not_reach_the_network(self):
         source = "import tempfile, os, socket\nfrom pathlib import Path\np = Path(tempfile.mkdtemp()) / 'x.log'\np.write_text('FAILED a')\nopen(p, 'w')\nos.remove(p)\n"
-        found = lint.scan(source, LICENCE.data["forbidden_imports"], LICENCE.data["forbidden_calls"], for_tests=True)
+        found = lint.scan(
+            source,
+            LICENCE.data["forbidden_imports"],
+            LICENCE.data["forbidden_calls"],
+            for_tests=True,
+        )
         self.assertEqual(found, ["new authority: imports socket"])
         self.assertTrue(any("writing" in item for item in self.scan(source)))
 
@@ -52,28 +70,46 @@ class LintTest(unittest.TestCase):
         self.assertEqual(self.scan(source), [])
 
     def test_qualified_and_aliased_dangerous_calls_are_named(self):
-        found = " | ".join(self.scan("import os\nfrom os import system as sh\nos.replace('a', 'b')\nsh('ls')\n"))
+        found = " | ".join(
+            self.scan(
+                "import os\nfrom os import system as sh\nos.replace('a', 'b')\nsh('ls')\n"
+            )
+        )
         self.assertIn("os.replace", found)
         self.assertIn("os.system", found)
 
 
 class SchemaTest(unittest.TestCase):
     def test_validate(self):
-        s = {"type": "object", "properties": {"n": {"type": "integer"}}, "required": ["n"], "additionalProperties": False}
+        s = {
+            "type": "object",
+            "properties": {"n": {"type": "integer"}},
+            "required": ["n"],
+            "additionalProperties": False,
+        }
         self.assertEqual(schema.validate({"n": 1}, s), [])
         self.assertTrue(schema.validate({"n": "1"}, s))
         self.assertTrue(schema.validate({}, s))
         self.assertTrue(schema.validate({"n": 1, "x": 2}, s))
 
     def test_maps_and_annotations(self):
-        s = {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}, "default": {}}
+        s = {
+            "type": "object",
+            "additionalProperties": {"type": "array", "items": {"type": "string"}},
+            "default": {},
+        }
         self.assertEqual(schema.check_schema(s), [])
         self.assertEqual(schema.validate({"tests/a.py": ["aiohttp.web"]}, s), [])
         self.assertTrue(schema.validate({"tests/a.py": [1]}, s))
 
     def test_unsupported_keywords_are_rejected(self):
         self.assertTrue(schema.check_schema({"type": "object", "$ref": "#/x"}))
-        self.assertEqual(schema.check_schema({"type": "object", "properties": {"a": {"type": "string"}}}), [])
+        self.assertEqual(
+            schema.check_schema(
+                {"type": "object", "properties": {"a": {"type": "string"}}}
+            ),
+            [],
+        )
 
 
 class RegistryTest(unittest.TestCase):
@@ -85,10 +121,23 @@ class RegistryTest(unittest.TestCase):
         (self.cand / "tool.py").write_text("def run(a):\n    return {}\n")
 
     def manifest(self, version):
-        return {"name": "parse_thing", "version": version, "access": "pure", "description": "d", "input_schema": {"type": "object"}, "output_schema": {"type": "object"}, "gap": {}}
+        return {
+            "name": "parse_thing",
+            "version": version,
+            "access": "pure",
+            "description": "d",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+            "gap": {},
+        }
 
     def test_install_versions_rollback_and_immutability(self):
-        receipt = {"passed": True, "tests": {"ran": 3, "ok": 3}, "blind_tests": {"ran": 4, "ok": 4}, "stub_failed": 1.0}
+        receipt = {
+            "passed": True,
+            "tests": {"ran": 3, "ok": 3},
+            "blind_tests": {"ran": 4, "ok": 4},
+            "stub_failed": 1.0,
+        }
         self.assertEqual(self.reg.next_version("parse_thing"), "0.1.0")
         self.reg.install(self.cand, self.manifest("0.1.0"), receipt)
         self.assertEqual(self.reg.next_version("parse_thing"), "0.2.0")
@@ -98,7 +147,9 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(self.reg.active(), {"parse_thing": "0.1.0"})
         with self.assertRaises(RegistryError):
             self.reg.install(self.cand, self.manifest("0.1.0"), receipt)
-        export = json.loads((self.reg.export(self.tmp / "exp") / "tools.json").read_text())
+        export = json.loads(
+            (self.reg.export(self.tmp / "exp") / "tools.json").read_text()
+        )
         self.assertEqual(len(export), 2)
         self.assertNotIn("code", json.dumps(export))
 
@@ -106,7 +157,14 @@ class RegistryTest(unittest.TestCase):
 class SnapshotTest(unittest.TestCase):
     def test_secrets_and_state_are_left_out(self):
         repo = Path(tempfile.mkdtemp())
-        for rel in ("app.py", ".env", ".env.example", "keys/server.pem", ".golem/registry/active.json", "src/m.py"):
+        for rel in (
+            "app.py",
+            ".env",
+            ".env.example",
+            "keys/server.pem",
+            ".golem/registry/active.json",
+            "src/m.py",
+        ):
             (repo / rel).parent.mkdir(parents=True, exist_ok=True)
             (repo / rel).write_text("x")
         attach = repo.parent / "ci.log"
@@ -116,7 +174,12 @@ class SnapshotTest(unittest.TestCase):
         self.assertIn("src/m.py", files)
         self.assertIn("_inputs/ci.log", files)
         self.assertIn(".env.example", files)
-        self.assertFalse(any(name in files for name in (".env", "keys/server.pem", ".golem/registry/active.json")))
+        self.assertFalse(
+            any(
+                name in files
+                for name in (".env", "keys/server.pem", ".golem/registry/active.json")
+            )
+        )
 
     def test_resolve_refuses_escape(self):
         root = Path(tempfile.mkdtemp())
@@ -150,11 +213,16 @@ class SandboxTest(unittest.TestCase):
         )
         result = Sandbox(LICENCE, snap).invoke(bundle, "pure", {})
         self.assertTrue(result["ok"], result)
-        self.assertEqual(result["result"], {"secret": None, "uid": 65534, "net": "blocked", "write": "blocked"})
+        self.assertEqual(
+            result["result"],
+            {"secret": None, "uid": 65534, "net": "blocked", "write": "blocked"},
+        )
 
     def test_stub_makes_real_tests_fail(self):
         bundle = Path(tempfile.mkdtemp())
-        (bundle / "tool.py").write_text("def run(args):\n    return {'n': args['a'] + 1}\n")
+        (bundle / "tool.py").write_text(
+            "def run(args):\n    return {'n': args['a'] + 1}\n"
+        )
         (bundle / "test_tool.py").write_text(
             "import unittest\nfrom tool import run\n"
             "class T(unittest.TestCase):\n"
