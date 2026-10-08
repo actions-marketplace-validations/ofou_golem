@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+dist/
+.env
+.env.*
+# Run scratch (candidates, transcripts). The registry under .golem/registry is committed.
+.golem/runs/
+uv.lock
+evidence/
+.golem

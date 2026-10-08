@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Run Golem from its Docker image against a repository on this machine.
+#
+#   scripts/golem-docker REPO run "TASK" [--attach FILE ...]
+#   scripts/golem-docker REPO registry
+#
+# The repository, every attached file's folder, and a work directory are mounted at the same
+# absolute paths inside the container, because the sandbox containers Golem starts on the host's
+# Docker mount those paths too. The Docker socket is mounted so Golem can start them; that gives
+# the Golem container control of the host's Docker, which is why it is kernel code only.
+set -euo pipefail
+
+IMAGE="${GOLEM_IMAGE:-golem:local}"
+repo="$(cd "$1" && pwd)"; shift
+work="${GOLEM_WORK:-$repo/.golem/work}"
+mkdir -p "$work"
+
+mounts=(-v "$repo:$repo" -v "$work:$work")
+args=()
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--attach" ]; then
+    file="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+    mounts+=(-v "$(dirname "$file"):$(dirname "$file"):ro")
+    args+=(--attach "$file"); shift 2
+  else
+    args+=("$1"); shift
+  fi
+done
+
+exec docker run --rm \
+  -e OPENROUTER_API_KEY \
+  -e TMPDIR="$work" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  "${mounts[@]}" \
+  "$IMAGE" --repo "$repo" "${args[@]}"

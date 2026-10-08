@@ -1,0 +1,174 @@
+"""The kernel loop without a model: make_tool -> blind tests -> sandbox -> stub check ->
+install_tool -> the installed tool runs in the sandbox through its proxy.
+
+The model calls are replaced here and only here: the "builder" arguments and the
+"blind tests" below are test fixtures, not capabilities. Nothing in this file is
+installed anywhere but a temporary directory.
+"""
+
+import asyncio
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from golem import jev, kernel, licence, snapshot
+from golem.registry import Registry
+from golem.sandbox import Sandbox
+
+ROOT = Path(__file__).resolve().parents[1]
+TASK = "Count how many lines in the attached build log are failures, and name the failing tests."
+
+CODE = '''import re
+
+def run(args):
+    text = open("/inputs/" + args["log_file"], encoding="utf-8").read()
+    names = re.findall(r"^FAILED (\\S+)", text, re.M)
+    return {"failures": len(names), "tests": names}
+'''
+OWN_TESTS = '''import unittest
+from tool import run
+
+class T(unittest.TestCase):
+    def test_counts(self):
+        self.assertEqual(run({"log_file": "build.log"})["failures"], 2)
+    def test_names(self):
+        self.assertEqual(run({"log_file": "build.log"})["tests"], ["tests/test_a.py::test_x", "tests/test_b.py::test_y"])
+    def test_missing_file(self):
+        with self.assertRaises(FileNotFoundError):
+            run({"log_file": "nope.log"})
+'''
+BLIND_TESTS = '''import unittest
+from tool import run
+
+class Blind(unittest.TestCase):
+    def test_count(self):
+        self.assertEqual(run({"log_file": "build.log"})["failures"], 2)
+    def test_first(self):
+        self.assertEqual(run({"log_file": "build.log"})["tests"][0], "tests/test_a.py::test_x")
+    def test_type(self):
+        self.assertIsInstance(run({"log_file": "build.log"})["tests"], list)
+    def test_second(self):
+        self.assertIn("tests/test_b.py::test_y", run({"log_file": "build.log"})["tests"])
+'''
+
+
+def args(**overrides):
+    base = {
+        "name": "count_failures",
+        "description": "Count FAILED lines in a build log under /inputs and list the failing test ids.",
+        "access": "pure",
+        "input_schema": {"type": "object", "properties": {"log_file": {"type": "string"}}, "required": ["log_file"]},
+        "output_schema": {"type": "object", "properties": {"failures": {"type": "integer"}, "tests": {"type": "array", "items": {"type": "string"}}}, "required": ["failures", "tests"]},
+        "code": CODE,
+        "tests": OWN_TESTS,
+        "gap": {"task_quote": "name the failing tests", "why_needed": "exact count and ids, not a guess"},
+    }
+    base.update(overrides)
+    return base
+
+
+@unittest.skipUnless(Sandbox.available(), "Docker is not running")
+class LoopTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        (repo / "README.md").write_text("demo\n")
+        log = self.tmp / "build.log"
+        log.write_text("ok tests/test_c.py::test_z\nFAILED tests/test_a.py::test_x\nFAILED tests/test_b.py::test_y\n")
+        snap = self.tmp / "snap"
+        files = snapshot.build(repo, snap, [log])
+        lic = licence.load(ROOT / "authority.json")
+        registry = Registry(repo / ".golem")
+        self.run_ = kernel.Run(
+            repo=repo, task=TASK, licence=lic, registry=registry, sandbox=Sandbox(lic, snap), snapshot_dir=snap,
+            files=files, api_key="unused", client=None, hooks=None, run_dir=repo / ".golem" / "runs" / "t",
+        )
+        self.patches = [
+            mock.patch.object(jev, "advise_gap", return_value=jev.Advice(error="offline test")),
+            mock.patch("golem.tester.write_blind_tests", new=mock.AsyncMock(return_value=BLIND_TESTS)),
+        ]
+        for patch in self.patches:
+            patch.start()
+
+    def tearDown(self):
+        for patch in self.patches:
+            patch.stop()
+
+    def make(self, **overrides):
+        return asyncio.run(kernel._make_tool(self.run_, args(**overrides)))
+
+    def test_create_test_install_and_reuse(self):
+        made = self.make()
+        self.assertEqual(made["status"], "passed", made)
+        install = kernel.install_tool_tool(self.run_)["function"]["execute"]({"candidate_id": made["candidate_id"]})
+        self.assertEqual(install["status"], "installed")
+        self.assertEqual(self.run_.registry.active(), {"count_failures": "0.1.0"})
+        proxies = kernel.installed_tools(self.run_)
+        self.assertEqual([p["function"]["name"] for p in proxies], ["count_failures"])
+        result = proxies[0]["function"]["execute"]({"log_file": "build.log"})
+        self.assertEqual(result, {"failures": 2, "tests": ["tests/test_a.py::test_x", "tests/test_b.py::test_y"]})
+        usage = self.run_.registry.journal("usage")
+        self.assertEqual(usage[-1]["tool"], "count_failures@0.1.0")
+        receipt = self.run_.registry.receipt("count_failures", "0.1.0")
+        self.assertEqual((receipt["tests"]["ok"], receipt["blind_tests"]["ok"], receipt["stub_failed"]), (3, 4, 1.0))
+
+    def test_privilege_request_is_refused_before_anything_runs(self):
+        made = self.make(code="import urllib.request\n" + CODE)
+        self.assertEqual(made["status"], "refused")
+        self.assertIn("new authority: imports urllib.request", made["reasons"])
+        self.assertEqual(self.run_.registry.active(), {})
+
+    def test_vacuous_tests_fail_the_stub_check(self):
+        vacuous = "import unittest\nfrom tool import run\nclass T(unittest.TestCase):\n" + "".join(
+            f"    def test_{i}(self):\n        self.assertTrue(callable(run))\n" for i in range(3))
+        made = self.make(tests=vacuous)
+        self.assertEqual(made["status"], "failed")
+        self.assertTrue(any("vacuous" in reason for reason in made["reasons"]), made)
+
+    def test_failing_implementation_is_not_installable(self):
+        made = self.make(code=CODE.replace('"failures": len(names)', '"failures": len(names) + 1'))
+        self.assertEqual(made["status"], "failed")
+        install = kernel.install_tool_tool(self.run_)["function"]["execute"]({"candidate_id": made["candidate_id"]})
+        self.assertEqual(install["status"], "refused")
+        self.assertEqual(self.run_.registry.active(), {})
+
+    def test_a_wrong_blind_test_can_be_disputed_and_dropped_only_with_the_reviewers_agreement(self):
+        wrong = BLIND_TESTS.replace("    def test_second(self):", "    def test_wrong(self):\n        self.assertEqual(run({\"log_file\": \"build.log\"})[\"failures\"], 99)\n\n    def test_second(self):")
+        with mock.patch("golem.tester.write_blind_tests", new=mock.AsyncMock(return_value=wrong)):
+            first = self.make()
+            self.assertEqual(first["status"], "failed")
+            self.assertEqual([item["test"] for item in first["blind_test_failures"]], ["test_wrong"])
+            dispute = [{"test": "test_wrong", "reason": "build.log has 2 FAILED lines, not 99"}]
+            with mock.patch("golem.tester.review_dispute", new=mock.AsyncMock(return_value={"verdict": "keep", "why": "stays"})):
+                kept = self.make(disputes=dispute)
+            self.assertEqual(kept["status"], "failed")
+            with mock.patch("golem.tester.review_dispute", new=mock.AsyncMock(return_value={"verdict": "drop", "why": "log has 2"})):
+                dropped = self.make(disputes=dispute)
+        self.assertEqual(dropped["status"], "passed", dropped)
+        receipt = self.run_.candidates[dropped["candidate_id"]].receipt
+        self.assertEqual([item["test"] for item in receipt["blind_tests_dropped"]], ["test_wrong"])
+
+    def test_schemas_sent_as_json_strings_are_decoded(self):
+        base = args()
+        made = self.make(input_schema=json.dumps(base["input_schema"]), output_schema=json.dumps(base["output_schema"]), gap=json.dumps(base["gap"]))
+        self.assertEqual(made["status"], "passed", made)
+
+    def test_renaming_a_tool_does_not_reset_the_attempt_cap(self):
+        broken = CODE.replace('"failures": len(names)', '"failures": len(names) + 1')
+        for _ in range(3):
+            self.assertEqual(self.make(code=broken)["status"], "failed")
+        renamed = self.make(name="count_failures_again", code=broken)
+        self.assertEqual(renamed["status"], "refused")
+        self.assertIn("renaming", renamed["reason"])
+
+    def test_gap_that_does_not_quote_the_task_is_refused(self):
+        made = self.make(gap={"task_quote": "build a log parser", "why_needed": "x"})
+        self.assertEqual(made["status"], "refused")
+        self.assertIn("gap", made["reason"])
+
+
+if __name__ == "__main__":
+    unittest.main()

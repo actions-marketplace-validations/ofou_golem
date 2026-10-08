@@ -1,0 +1,95 @@
+{
+  "name": "shem",
+  "note": "Capabilities may grow. This licence may not.",
+  "shapes": [
+    "function"
+  ],
+  "access": [
+    "pure",
+    "repository-read",
+    "registry-read"
+  ],
+  "imports": "stdlib",
+  "forbidden_imports": [
+    "socket",
+    "ssl",
+    "http",
+    "urllib",
+    "ftplib",
+    "smtplib",
+    "telnetlib",
+    "xmlrpc",
+    "subprocess",
+    "multiprocessing",
+    "concurrent",
+    "ctypes",
+    "cffi",
+    "importlib",
+    "pty",
+    "signal",
+    "resource",
+    "requests",
+    "httpx",
+    "aiohttp"
+  ],
+  "forbidden_calls": [
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "breakpoint",
+    "os.system",
+    "os.popen",
+    "os.spawn*",
+    "os.exec*",
+    "os.fork",
+    "os.kill",
+    "os.remove",
+    "os.unlink",
+    "os.rmdir",
+    "os.removedirs",
+    "os.rename",
+    "os.replace",
+    "os.chmod",
+    "os.chown",
+    "os.symlink",
+    "os.link",
+    "os.truncate",
+    "shutil.rmtree",
+    "shutil.move",
+    "shutil.copy*",
+    "pathlib.Path.unlink",
+    "*.write_text",
+    "*.write_bytes",
+    "*.unlink",
+    "*.rmdir",
+    "*.chmod"
+  ],
+  "sandbox": {
+    "image": "python:3.12-slim",
+    "network": "none",
+    "memory": "512m",
+    "pids": 128,
+    "cpus": "1",
+    "timeout_seconds": 120
+  },
+  "budget": {
+    "max_usd_per_task": 0.20,
+    "max_sessions_per_task": 3,
+    "max_steps_per_session": 18,
+    "max_make_tool_per_task": 4,
+    "max_attempts_per_tool": 3,
+    "max_sandbox_calls_per_task": 60
+  },
+  "models": {
+    "builder": "openrouter/free",
+    "tester": "openrouter/pareto-code",
+    "tester_plugins": [
+      {
+        "id": "pareto-router",
+        "min_coding_score": 0.25
+      }
+    ],
+    "advisor": "typesafe/jev-1.13"
+  }
+}

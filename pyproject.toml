@@ -1,0 +1,23 @@
+[project]
+name = "golem"
+version = "2026.10.08"
+description = "An agent that builds, tests, and keeps its own tools inside a frozen licence."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["openrouter-agent-sdk", "openrouter"]
+
+[project.scripts]
+golem = "golem.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["golem"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
