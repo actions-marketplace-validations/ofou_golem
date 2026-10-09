@@ -1,0 +1,118 @@
+[
+  {
+    "name": "pi",
+    "github": "earendil-works/pi",
+    "sparse": ["packages"],
+    "dod": true,
+    "globs": ["packages/*"],
+    "tasks": [
+      {
+        "phase": "build",
+        "kind": "package-deps",
+        "task": "List the internal dependencies between the packages directly under packages/ (each package.json). Count a dependency, devDependency, or peerDependency when its name is another of those packages. Give an order in which the packages can be built so that every package comes after the packages it depends on. If the graph has a cycle, name one cycle instead of an order."
+      },
+      {
+        "phase": "build",
+        "kind": "package-files",
+        "task": "For each package directory directly under packages/ that has a package.json, how many files does the repository snapshot see under that package directory, including nested files? List each package.json name with its file count."
+      },
+      {
+        "phase": "manage",
+        "task": "Using the registry export (manifests, receipts, gaps, usage — not tool code), list every installed tool with its version, the task words its gap quotes, and which installed tools' output fields could feed another installed tool's input fields. If no registry-read tool is installed yet, create, test, and install one that answers this from the registry export, then answer."
+      },
+      {
+        "phase": "combine",
+        "task": "Without calling make_tool and without rebuilding any tool: report the internal package build order (or one cycle), and for each package report how many snapshot files sit under its directory. Use only installed Golem tools."
+      }
+    ]
+  },
+  {
+    "name": "hermes",
+    "github": "NousResearch/hermes-agent",
+    "sparse": ["tools"],
+    "dod": true,
+    "root": "tools",
+    "tasks": [
+      {
+        "phase": "build",
+        "kind": "python-imports",
+        "task": "Under tools/, which Python modules import other modules from tools/, and which tools/ module is imported by the most other tools/ modules? Resolve relative imports and imports that start with tools. Do not count a file as importing itself. If several modules tie for the most imported, name all of them."
+      },
+      {
+        "phase": "build",
+        "kind": "python-file-counts",
+        "task": "Under tools/, how many .py files are there in each immediate subdirectory of tools/ (count nested .py files toward that subdirectory)? Which immediate subdirectory has the most .py files? If several tie, name all of them."
+      },
+      {
+        "phase": "manage",
+        "task": "Using the registry export (manifests, receipts, gaps, usage — not tool code), list every installed tool with its version, the task words its gap quotes, and which installed tools' output fields could feed another installed tool's input fields. If no registry-read tool is installed yet, create, test, and install one that answers this from the registry export, then answer."
+      },
+      {
+        "phase": "combine",
+        "task": "Without calling make_tool and without rebuilding any tool: name the tools/ module imported by the most other tools/ modules, and name the immediate tools/ subdirectory with the most .py files. Use only installed Golem tools."
+      }
+    ]
+  },
+  {
+    "name": "claude-code",
+    "github": "anthropics/claude-code",
+    "sparse": ["plugins"],
+    "kind": "plugin-files",
+    "root": "plugins",
+    "task": "Under plugins/, read each plugin's .claude-plugin/plugin.json and report its name field. Then count the files inside each plugin directory, including files in nested directories. Which plugin directory contains the most files? If several tie, name all of them."
+  },
+  {
+    "name": "kilocode",
+    "github": "Kilo-Org/kilocode",
+    "sparse": ["packages"],
+    "kind": "package-deps",
+    "globs": ["packages/*", "packages/sdk/js"],
+    "task": "List the internal dependencies between the packages directly under packages/ and the package at packages/sdk/js (each package.json). Count a dependency, devDependency, or peerDependency when its name is another of those packages. Give an order in which the packages can be built so that every package comes after the packages it depends on. If the graph has a cycle, name one cycle instead of an order."
+  },
+  {
+    "name": "cline",
+    "github": "cline/cline",
+    "sparse": ["sdk/packages"],
+    "kind": "package-deps",
+    "globs": ["sdk/packages/*"],
+    "task": "List the internal dependencies between the packages directly under sdk/packages/ (each package.json). Count a dependency, devDependency, or peerDependency when its name is another of those packages. Give an order in which the packages can be built so that every package comes after the packages it depends on. If the graph has a cycle, name one cycle instead of an order."
+  },
+  {
+    "name": "omp",
+    "github": "can1357/oh-my-pi",
+    "sparse": ["packages"],
+    "kind": "package-deps",
+    "globs": ["packages/*"],
+    "task": "List the internal dependencies between the packages directly under packages/ (each package.json). Count a dependency, devDependency, or peerDependency when its name is another of those packages. Give an order in which the packages can be built so that every package comes after the packages it depends on. If the graph has a cycle, name one cycle instead of an order."
+  },
+  {
+    "name": "codex",
+    "github": "openai/codex",
+    "sparse": ["codex-rs"],
+    "kind": "cargo-dependents",
+    "workspace": "codex-rs",
+    "crate": "codex-protocol",
+    "task": "In the Rust workspace under codex-rs/, how many workspace crates depend directly on the codex-protocol crate (counting dependencies, dev-dependencies and build-dependencies), and which five workspace crates have the most direct dependents inside the workspace?"
+  },
+  {
+    "name": "openclaw",
+    "github": "openclaw/openclaw",
+    "sparse": ["packages"],
+    "kind": "package-deps",
+    "globs": ["packages/*"],
+    "task": "List the internal dependencies between the packages directly under packages/ (each package.json). Count a dependency, devDependency, or peerDependency when its name is another of those packages. Give an order in which the packages can be built so that every package comes after the packages it depends on. If the graph has a cycle, name one cycle instead of an order."
+  },
+  {
+    "name": "command-code",
+    "github": "CommandCodeAI/command-code",
+    "skip": "The public repository is a README and a workflow. There is no source tree to give Golem."
+  },
+  {
+    "name": "openhands",
+    "github": "OpenHands/OpenHands",
+    "sparse": ["src"],
+    "kind": "ts-imports",
+    "root": "src",
+    "task": "Under src/, which TypeScript or TSX files import another file under src/ with a relative import (a path starting with .), and which src/ file is imported by the most other src/ files? Resolve index files and the extensions .ts, .tsx, .js, and .jsx. If several files tie, name all of them."
+  }
+]
