@@ -511,12 +511,16 @@ def _import_targets(path: Path, module: str, known: set[str]) -> set[str]:
             if base is None:
                 continue
             names = [alias.name for alias in node.names if alias.name != "*"]
-            if base in known:
-                found.add(base)
+            children = []
             for name in names:
                 child = f"{base}.{name}" if base else name
                 if child in known:
-                    found.add(child)
+                    children.append(child)
+            found.update(children)
+            # `from . import sibling` names the sibling. `from package import symbol`
+            # loads package, and so does a relative import of a symbol that is not itself a module.
+            if base in known and (node.level == 0 or node.module or not children):
+                found.add(base)
     return found
 
 
@@ -647,7 +651,7 @@ def _python_file_counts(repo: Path, root: str) -> dict[str, object]:
         path = Path(rel)
         if path.parts[0] != root or path.suffix != ".py":
             continue
-        if len(path.parts) < 2:
+        if len(path.parts) < 3:
             continue
         counts[path.parts[1]] += 1
     rows = [{"dir": name, "files": counts[name]} for name in sorted(counts)]
