@@ -27,6 +27,7 @@ from golem.sandbox_runner import MARK
 from golem.sandbox_tests import MARK as TESTS_MARK
 
 RUNNER = Path(__file__).with_name("sandbox_runner.py")
+SCHEMA_MODULE = Path(__file__).with_name("schema.py")  # the validator the installed-tool proxy uses
 TESTS_RUNNER = Path(__file__).with_name("sandbox_tests.py")
 STUBS = {
     "raises": """def run(args):
@@ -73,8 +74,10 @@ class Sandbox:
         self.runtime.mkdir(parents=True, exist_ok=True)
         self.runner = self.runtime / "runner.py"
         self.tests_runner = self.runtime / "tests.py"
+        self.schema_module = self.runtime / "schema.py"
         shutil.copyfile(RUNNER, self.runner)
         shutil.copyfile(TESTS_RUNNER, self.tests_runner)
+        shutil.copyfile(SCHEMA_MODULE, self.schema_module)
 
     @staticmethod
     def available() -> bool:
@@ -156,6 +159,7 @@ class Sandbox:
             (Path(bundle).resolve(), "/tool"),
             (self.runner.resolve(), "/golem/runner.py"),
             (self.tests_runner.resolve(), "/golem/tests.py"),
+            (self.schema_module.resolve(), "/golem/schema.py"),
         ]
         inputs = self.snapshot_dir / "_inputs"
         if inputs.is_dir():

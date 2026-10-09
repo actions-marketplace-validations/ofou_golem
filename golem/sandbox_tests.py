@@ -8,6 +8,7 @@ import json
 import sys
 import traceback
 import unittest
+from pathlib import Path
 
 MARK = "<<<GOLEM_TESTS>>>"
 
@@ -68,9 +69,40 @@ class Recording(unittest.TextTestResult):
         self._add(test, "FAIL", "unexpected success")
 
 
+def _check_outputs_against_schema() -> None:
+    """Wrap tool.run so every result a test receives must match the manifest's output_schema,
+    checked with the validator real calls use. Without this a tool could pass every test and
+    still fail every real call on a schema mismatch (it did: integer counts typed as strings)."""
+    manifest = Path("/tool/manifest.json")
+    if not manifest.is_file():
+        return  # stub runs carry no manifest, so the vacuous-test check is unchanged
+    output_schema = json.loads(manifest.read_text(encoding="utf-8")).get("output_schema")
+    if not output_schema:
+        return
+    sys.path.insert(0, "/golem")
+    import tool  # pyright: ignore[reportMissingImports]
+
+    from schema import validate
+
+    original = tool.run
+
+    def run(args):
+        result = original(args)
+        problems = validate(result, output_schema)
+        if problems:
+            raise AssertionError("the result does not match output_schema: " + "; ".join(problems[:4]))
+        return result
+
+    tool.run = run
+
+
 def main() -> None:
     pattern = sys.argv[1] if len(sys.argv) > 1 else "test_*.py"
     sys.path.insert(0, "/tool")
+    try:
+        _check_outputs_against_schema()
+    except Exception:  # noqa: BLE001, S110 - a broken tool.py fails in the tests themselves
+        pass
     suite = unittest.TestLoader().discover(
         "/tool", pattern=pattern, top_level_dir="/tool"
     )

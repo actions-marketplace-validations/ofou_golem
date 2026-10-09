@@ -191,6 +191,15 @@ class LoopTest(unittest.TestCase):
         self.assertEqual(made["status"], "failed")
         self.assertTrue(any("vacuous" in reason for reason in made["reasons"]), made)
 
+    def test_a_result_that_breaks_its_own_output_schema_fails_in_testing(self):
+        strict = dict(args()["output_schema"], additionalProperties=False)
+        made = self.make(output_schema=strict, code=CODE.replace('"tests": names}', '"tests": names, "extra": 1}'))
+        self.assertEqual(made["status"], "failed", made)
+        self.assertTrue(
+            any("output_schema" in item["message"] for item in made["your_test_failures"]),
+            made["your_test_failures"],
+        )
+
     def test_failing_implementation_is_not_installable(self):
         made = self.make(
             code=CODE.replace('"failures": len(names)', '"failures": len(names) + 1')
