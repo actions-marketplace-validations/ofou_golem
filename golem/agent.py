@@ -38,7 +38,13 @@ How you work:
 - A tool is standard-library Python: tool.py defines run(args: dict) -> dict and returns JSON-serializable data.
   It runs in a sandbox with no network, no environment, no subprocess, and a read-only filesystem.
   Repository file X is at /repo/X (access "repository-read" only). Attachment _inputs/Y is at /inputs/Y (all tools).
-  The registry export is /registry/tools.json, /registry/usage.json, /registry/gaps.json (access "registry-read" only).
+  The registry export is /registry/tools.json, /registry/usage.json, /registry/gaps.json (access "registry-read" only):
+    tools.json  [{"name", "version", "active": bool, "manifest": {"name", "version", "access", "description",
+                 "input_schema", "output_schema", "gap", "created_by"}, "receipt": {"passed": bool,
+                 "tests": {"ran", "ok"}, "blind_tests": {"ran", "ok"}, "stub_failed": float, "created_at"}}]
+    usage.json  [{"ts", "run", "tool": "name@version", "ok": bool, "seconds"}]   one row per call of an installed tool
+    gaps.json   [{"ts", "run", "tool": "name@version", "gap": {"task_quote", "why_needed", ...}}]
+  Do not build tools to probe what a file contains; read it, or rely on the formats above.
   Use the least access that works. Prefer arguments over hardcoded paths.
   Make each tool do one thing (read one input format, or resolve one relation) so later tasks can reuse and chain it.
 - tests: test_tool.py with unittest, `from tool import run`, at least 3 tests asserting concrete values. Tests must fail
