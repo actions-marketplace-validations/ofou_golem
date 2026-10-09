@@ -391,6 +391,7 @@ async def _make_tool(run: Run, args: dict) -> dict:
                     run.tester_hooks or run.hooks,
                     stop=[lambda _options: run.next_step_may_overrun()],
                     plugins=run.licence.data["models"].get("tester_plugins"),
+                    reasoning=run.licence.data["models"].get("tester_reasoning"),
                 )
                 break
             except Exception as exc:  # noqa: BLE001 - any writer failure is a retry, not a crash
@@ -592,6 +593,7 @@ async def _settle_disputes(
                 run.tester_hooks or run.hooks,
                 stop=[lambda _options: run.next_step_may_overrun()],
                 plugins=run.licence.data["models"].get("tester_plugins"),
+                reasoning=run.licence.data["models"].get("tester_reasoning"),
             )
         except Exception as exc:  # noqa: BLE001 - review failure keeps the test
             review = {

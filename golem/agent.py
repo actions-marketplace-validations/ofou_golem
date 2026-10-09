@@ -159,6 +159,8 @@ async def run_task(run: kernel.Run) -> str:
         }
         if licence.data["models"].get("builder_plugins"):
             request["plugins"] = licence.data["models"]["builder_plugins"]
+        if licence.data["models"].get("builder_reasoning"):
+            request["reasoning"] = licence.data["models"]["builder_reasoning"]
         result = call_model(run.client, request)
         try:
             text = await result.get_text()

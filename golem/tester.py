@@ -48,6 +48,7 @@ async def review_dispute(
     hooks,
     stop=None,
     plugins=None,
+    reasoning=None,
 ) -> dict:
     brief = {
         "tool": {
@@ -74,6 +75,8 @@ async def review_dispute(
     }
     if plugins:
         request["plugins"] = plugins
+    if reasoning:
+        request["reasoning"] = reasoning
     text = await call_model(client, request).get_text()
     match = _JSON.search(text or "")
     try:
@@ -106,9 +109,8 @@ def statement_at(suite: str, line: int) -> str | None:
     for node in ast.walk(ast.parse(suite)):
         if not isinstance(node, ast.stmt):
             continue
-        covers = (
-            not isinstance(node, COMPOUND)
-            and node.lineno <= line <= (node.end_lineno or node.lineno)
+        covers = not isinstance(node, COMPOUND) and node.lineno <= line <= (
+            node.end_lineno or node.lineno
         )
         if covers and (found is None or node.lineno >= found.lineno):
             found = node
@@ -160,6 +162,7 @@ async def write_blind_tests(
     hooks,
     stop=None,
     plugins=None,
+    reasoning=None,
 ) -> str:
     brief = {
         "name": manifest["name"],
@@ -179,6 +182,8 @@ async def write_blind_tests(
     }
     if plugins:
         request["plugins"] = plugins
+    if reasoning:
+        request["reasoning"] = reasoning
     result = call_model(client, request)
     text = await result.get_text()
     match = _BLOCK.search(text or "")
@@ -200,10 +205,16 @@ def anonymize(suite: str) -> tuple[str, dict]:
         if not isinstance(node, ast.ClassDef):
             continue
         for item in node.body:
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name.startswith("test"):
+            if isinstance(
+                item, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ) and item.name.startswith("test"):
                 new = f"test_blind_{len(names) + 1:02d}"
                 names[new], item.name = item.name, new
                 first = item.body[0] if item.body else None
-                if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                if (
+                    isinstance(first, ast.Expr)
+                    and isinstance(first.value, ast.Constant)
+                    and isinstance(first.value.value, str)
+                ):
                     item.body = item.body[1:] or [ast.Pass()]
     return ast.unparse(tree) + "\n", names
