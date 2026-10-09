@@ -39,7 +39,7 @@ STUBS = {
 }
 MAX_OUTPUT = 20_000  # stderr kept for the log
 MAX_STDOUT = 2_000_000  # stdout kept for parsing; the 120 s timeout bounds it anyway
-MAX_RESULT = 20_000  # a tool result larger than this would flood the model's context
+MAX_RESULT = 100_000  # characters, about 25k tokens; larger results are refused with "return less"
 
 
 @dataclass
