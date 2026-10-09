@@ -74,7 +74,7 @@ def _candidate_files(repo: Path) -> list[str]:
         git = shutil.which("git")
         if git is None:
             raise OSError("git is not on PATH")
-        out = subprocess.run(  # noqa: S603 - fixed argv, path from shutil.which
+        out = subprocess.run(  # noqa: S603
             [
                 git,
                 "-C",

@@ -24,7 +24,7 @@ ALLOWED_KEYWORDS = {
     "maxItems",
     "description",
     "default",
-    "title",  # annotations: accepted, never enforced
+    "title",
 }
 TYPES = {"object", "array", "string", "integer", "number", "boolean", "null"}
 

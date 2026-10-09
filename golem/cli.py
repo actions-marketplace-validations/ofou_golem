@@ -182,9 +182,7 @@ def _credits() -> int:
 def _verify(repo: Path, registry: Registry, lic, attachments: list[Path]) -> int:
     """Re-prove every installed tool without any model or key: its files still hash to the
     receipt, its own and blind tests pass in the sandbox, and they still fail against stubs."""
-    from golem.kernel import (
-        MIN_STUB_FAIL_RATIO,  # here, so login and licence work without the SDK
-    )
+    from golem.kernel import MIN_STUB_FAIL_RATIO
 
     active = registry.active()
     if not active:

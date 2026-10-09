@@ -22,7 +22,7 @@ from golem.licence import Licence, unchanged
 from golem.registry import Registry
 from golem.sandbox import Sandbox
 
-SDK_TURN_LIMIT = 20  # openrouter_agent.model_result._MAX_TURNS raises past this
+SDK_TURN_LIMIT = 20
 FALLBACK_USD_PER_INPUT_TOKEN = 5 / 1_000_000
 FALLBACK_USD_PER_OUTPUT_TOKEN = 25 / 1_000_000
 FALLBACK_MIN_USD_PER_CALL = 0.05
@@ -93,7 +93,6 @@ def _spend_hooks(run: kernel.Run, role: str) -> HooksManager:
         usage = payload.get("usage") or {}
         cost = usage.get("cost")
         if cost is None:
-            # No cost reported: charge a deliberately high estimate so the cap still binds.
             cost = (
                 usage.get("input_tokens", 0) * FALLBACK_USD_PER_INPUT_TOKEN
                 + usage.get("output_tokens", 0) * FALLBACK_USD_PER_OUTPUT_TOKEN
@@ -165,7 +164,6 @@ async def run_task(run: kernel.Run) -> str:
         try:
             text = await result.get_text()
         except RuntimeError as exc:
-            # The SDK raises when it stops a run (its turn limit, or "Response failed"). Treat it as the session's end.
             run.say("session", f"{session}/{sessions} stopped by the SDK: {exc}")
             text = f"The session ended before a final answer: {exc}"
         if run.installed_now and session < sessions and not run.over_budget():

@@ -131,8 +131,16 @@ class LoopTest(unittest.TestCase):
 
     def test_verify_reproves_installed_tools_and_catches_a_changed_file(self):
         made = self.make()
-        kernel.install_tool_tool(self.run_)["function"]["execute"]({"candidate_id": made["candidate_id"]})
-        argv = ["--repo", str(self.tmp / "repo"), "verify", "--attach", str(self.tmp / "build.log")]
+        kernel.install_tool_tool(self.run_)["function"]["execute"](
+            {"candidate_id": made["candidate_id"]}
+        )
+        argv = [
+            "--repo",
+            str(self.tmp / "repo"),
+            "verify",
+            "--attach",
+            str(self.tmp / "build.log"),
+        ]
         with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
             self.assertEqual(cli.main(argv), 0, out.getvalue())
         self.assertIn("count_failures@0.1.0: OK", out.getvalue())
@@ -225,10 +233,13 @@ class LoopTest(unittest.TestCase):
             self.assertEqual(first["status"], "failed")
             self.assertEqual(
                 [item["test"] for item in first["blind_test_failures"]],
-                ["test_blind_04"],  # test_wrong, renamed before the builder sees it
+                ["test_blind_04"],
             )
             dispute = [
-                {"test": "test_blind_04", "reason": "build.log has 2 FAILED lines, not 99"}
+                {
+                    "test": "test_blind_04",
+                    "reason": "build.log has 2 FAILED lines, not 99",
+                }
             ]
             with mock.patch(
                 "golem.tester.review_dispute",
@@ -248,7 +259,6 @@ class LoopTest(unittest.TestCase):
         self.assertEqual(
             [item["test"] for item in receipt["blind_tests_dropped"]], ["test_blind_04"]
         )
-        # Jev is asked about the exact failing assertion and only logged (offline here, so no answer)
         shadow = receipt["blind_tests_dropped"][0]["jev_shadow"]
         as_run = tester.anonymize(wrong)[0]
         self.assertIn("99", tester.statement_at(as_run, shadow["assertion_line"]) or "")

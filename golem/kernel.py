@@ -35,10 +35,8 @@ TESTER_BUDGET_USD = 0.30
 TESTER_TRIES = 2
 MAX_DROPS_PER_SUITE = 2
 DISPUTE_BUDGET_USD = 0.10
-MIN_USD_TO_MAKE = 0.03  # refuse to start a build that could not pay for its blind tests
-MAX_SENDBACKS_PER_TASK = (
-    2  # Jev sends a gap back at most once, and this many gaps per task
-)
+MIN_USD_TO_MAKE = 0.03
+MAX_SENDBACKS_PER_TASK = 2
 
 
 @dataclass
@@ -113,9 +111,6 @@ class Run:
         return max(self.licence.budget("max_usd_per_task") - self.spent, 0.0)
 
 
-# -- read tools ------------------------------------------------------------------
-
-
 def read_tools(run: Run) -> list:
     def list_files(args, _context=None):
         pattern = args.get("pattern") or "*"
@@ -164,8 +159,6 @@ def read_tools(run: Run) -> list:
         ),
     ]
 
-
-# -- make_tool -------------------------------------------------------------------
 
 MAKE_TOOL_SCHEMA = {
     "type": "object",
@@ -394,7 +387,7 @@ async def _make_tool(run: Run, args: dict) -> dict:
                     reasoning=run.licence.data["models"].get("tester_reasoning"),
                 )
                 break
-            except Exception as exc:  # noqa: BLE001 - any writer failure is a retry, not a crash
+            except Exception as exc:  # noqa: BLE001
                 errors.append(f"{type(exc).__name__}: {str(exc)[:300]}")
                 run.say(
                     "blind",
@@ -403,7 +396,6 @@ async def _make_tool(run: Run, args: dict) -> dict:
                 if run.over_budget():
                     break
         if blind is None:
-            # The tester's failure is infrastructure, not the builder's: give the attempt back.
             run.attempts[key] -= 1
             run.made -= 1
             return {
@@ -442,8 +434,6 @@ async def _make_tool(run: Run, args: dict) -> dict:
                 ],
                 "next": "Call make_tool again with the same arguments.",
             }
-        # The suite as written, names and docstrings included, is kept for audit; it is not run,
-        # hashed or installed. What runs uses opaque test names (see tester.anonymize).
         (folder / "blind_tests_as_written.txt").write_text(blind, encoding="utf-8")
         blind, renamed = tester.anonymize(blind)
         run.say(
@@ -541,9 +531,6 @@ async def _make_tool(run: Run, args: dict) -> dict:
         "attempt": attempt,
         "reasons": reasons,
         "your_test_failures": own.failed[:8],
-        # Names and exception types only. The messages carry the blind tester's expected values,
-        # and a builder that sees them can copy them into its code or its answer (it did, in the
-        # codex and hermes runs). The full messages stay in the log.
         "blind_test_failures": [
             {"test": item["test"], "error": item["message"].split(":", 1)[0]}
             for item in blind_report.failed[:8]
@@ -560,7 +547,7 @@ async def _settle_disputes(
     dropped = run.dropped.setdefault(suite_key, [])
     as_run = run.blind_suites[
         suite_key
-    ]  # recorded failing lines refer to this text, before any drop
+    ]
     for item in disputes[:MAX_DROPS_PER_SUITE]:
         test_name, reason = str(item.get("test", "")), str(item.get("reason", ""))
         suite = run.blind_suites[suite_key]
@@ -595,7 +582,7 @@ async def _settle_disputes(
                 plugins=run.licence.data["models"].get("tester_plugins"),
                 reasoning=run.licence.data["models"].get("tester_reasoning"),
             )
-        except Exception as exc:  # noqa: BLE001 - review failure keeps the test
+        except Exception as exc:  # noqa: BLE001
             review = {
                 "verdict": "keep",
                 "why": f"review failed ({type(exc).__name__}), so the test stays",
@@ -618,9 +605,6 @@ async def _settle_disputes(
                     "jev_shadow": shadow,
                 }
             )
-
-
-# -- Jev -------------------------------------------------------------------------
 
 
 def _jev_gate(run: Run, manifest: dict, key: str, new_interface: bool) -> dict | None:
@@ -697,9 +681,6 @@ def _jev_dispute_shadow(
     return record
 
 
-# -- install_tool ----------------------------------------------------------------
-
-
 def install_tool_tool(run: Run):
     def install_tool(args, _context=None):
         candidate = run.candidates.get(args.get("candidate_id", ""))
@@ -747,9 +728,6 @@ def install_tool_tool(run: Run):
         },
         execute=install_tool,
     )
-
-
-# -- installed tools -------------------------------------------------------------
 
 
 def installed_tools(run: Run) -> list:
@@ -813,9 +791,6 @@ def _proxy(run: Run, name: str, version: str, manifest: dict):
         )
 
     return call
-
-
-# -- helpers ---------------------------------------------------------------------
 
 
 def _refuse(run: Run, name: str, reason: str) -> dict:

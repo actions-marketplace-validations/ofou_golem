@@ -32,16 +32,11 @@ from dataclasses import dataclass, field
 
 ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
 
-# make_tool gate: send back when ...
-EXACT_OP_AT = 0.30  # ... the quoted words need no exact operation (p at or below)
-SAME_JOB_AT = 0.75  # ... an installed tool already does it (p at or above)
-UNCLEAR_AT = 0.30  # ... an output field does not say what it holds (p at or below)
-# blind-test dispute: the reviewer's "drop" would count only if
-DROP_KEY_AT = 0.55  # ... Jev finds the assertion outside the contract (p at or above)
+EXACT_OP_AT = 0.30
+SAME_JOB_AT = 0.75
+UNCLEAR_AT = 0.30
+DROP_KEY_AT = 0.55
 
-# Checks that change what happens. Every other check is asked and logged only ("shadow"):
-# same_job landed on the right side of its threshold in every eval but with less than the
-# 0.10 margin on held-out cases, and the dispute key failed 2 of 4 held-out cases.
 ACTING = {"exact_op", "clear"}
 
 MAX_INSTALLED_ASKED = 20
@@ -84,7 +79,7 @@ def ask(
     started = time.monotonic()
     try:
         response = _post(api_key, body, timeout)
-    except Exception as exc:  # noqa: BLE001 - any failure is "no answer", never approval
+    except Exception as exc:  # noqa: BLE001
         return Reply(
             error=f"{type(exc).__name__}: {str(exc)[:160]}",
             seconds=round(time.monotonic() - started, 3),
@@ -109,9 +104,6 @@ def ask(
     else:
         reply.ok = True
     return reply
-
-
-# -- make_tool gate ----------------------------------------------------------------
 
 
 def _fields(output_schema: dict, prefix: str = "") -> list[tuple[str, dict]]:
@@ -208,9 +200,9 @@ def gate_request(
 
 @dataclass
 class Verdict:
-    checks: dict  # each check that fired -> what the builder should do about it
-    acting: list  # the fired checks in ACTING
-    shadow: list  # the fired checks that are only logged
+    checks: dict
+    acting: list
+    shadow: list
 
 
 def judge_gate(reply: Reply) -> Verdict:
@@ -236,9 +228,6 @@ def judge_gate(reply: Reply) -> Verdict:
                 )
     acting = [check for check in checks if check.split("=")[0].split("::")[0] in ACTING]
     return Verdict(checks, acting, [check for check in checks if check not in acting])
-
-
-# -- blind-test dispute --------------------------------------------------------------
 
 
 def dispute_request(
@@ -290,7 +279,7 @@ def _post(api_key: str, body: dict, timeout: float) -> dict:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - fixed https URL
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise RuntimeError(

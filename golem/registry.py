@@ -38,8 +38,6 @@ class Registry:
         self.golem_dir = Path(golem_dir)
         self.root = self.golem_dir / "registry"
 
-    # -- reading -----------------------------------------------------------
-
     def active(self) -> dict[str, str]:
         path = self.root / "active.json"
         if not path.is_file():
@@ -96,8 +94,6 @@ class Registry:
             )
         return rows
 
-    # -- writing -----------------------------------------------------------
-
     def install(self, candidate: Path, manifest: dict, receipt: dict) -> str:
         name, version = manifest["name"], manifest["version"]
         _check_name(name)
@@ -116,7 +112,7 @@ class Registry:
         _write_json(staging / "receipt.json", receipt)
         staging.chmod(
             0o755
-        )  # mkdtemp makes 0700, which the sandbox's uid 65534 cannot read on Linux
+        )
         os.replace(staging, target)
         self._set_active(name, version)
         return f"{name}@{version}"
@@ -134,8 +130,6 @@ class Registry:
         _write_json_atomic(
             self.root / "active.json", {"tools": dict(sorted(tools.items()))}
         )
-
-    # -- journals ----------------------------------------------------------
 
     def record(self, journal: str, entry: dict) -> None:
         self.golem_dir.mkdir(parents=True, exist_ok=True)

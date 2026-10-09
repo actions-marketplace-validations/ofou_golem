@@ -22,7 +22,7 @@ def main() -> None:
                 {"ok": True, "result": result}, ensure_ascii=False, default=str
             )
         )
-    except BaseException as exc:  # noqa: BLE001 - report every failure as data
+    except BaseException as exc:  # noqa: BLE001
         print(
             MARK
             + json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"[:2000]})

@@ -37,8 +37,8 @@ STUBS = {
     return {}
 """,
 }
-MAX_OUTPUT = 20_000  # stderr kept for the log
-MAX_STDOUT = 2_000_000  # stdout kept for parsing; the 120 s timeout bounds it anyway
+MAX_OUTPUT = 20_000
+MAX_STDOUT = 2_000_000
 MAX_RESULT = 100_000  # characters, about 25k tokens; larger results are refused with "return less"
 
 
@@ -68,8 +68,6 @@ class Sandbox:
         self.snapshot_dir = Path(snapshot_dir)
         self.registry_export = registry_export
         self.calls = 0
-        # Everything a sandbox container mounts lives next to the snapshot, so the paths exist on the
-        # Docker host even when Golem itself runs in a container that talks to the host's Docker.
         self.runtime = self.snapshot_dir.parent / "golem-runtime"
         self.runtime.mkdir(parents=True, exist_ok=True)
         self.runner = self.runtime / "runner.py"
@@ -84,15 +82,13 @@ class Sandbox:
         docker = shutil.which("docker")
         if docker is None:
             return False
-        probe = subprocess.run(  # noqa: S603 - fixed argv, path from shutil.which
+        probe = subprocess.run(  # noqa: S603
             [docker, "info", "--format", "{{.ServerVersion}}"],
             capture_output=True,
             text=True,
             check=False,
         )
         return probe.returncode == 0
-
-    # -- public ------------------------------------------------------------
 
     def run_tests(
         self, bundle: Path, access: str, pattern: str = "test_*.py"
@@ -114,7 +110,7 @@ class Sandbox:
             stub = Path(tmp)
             stub.chmod(
                 0o755
-            )  # mkdtemp makes 0700, which uid 65534 cannot read on Linux
+            )
             for test_file in Path(bundle).glob("test_*.py"):
                 shutil.copy2(test_file, stub / test_file.name)
             (stub / "tool.py").write_text(STUBS[kind], encoding="utf-8")
@@ -143,8 +139,6 @@ class Sandbox:
             "error": f"sandbox exited {code} without a result: {out[-800:]}",
             "seconds": round(time.monotonic() - started, 2),
         }
-
-    # -- docker ------------------------------------------------------------
 
     def _docker(
         self, bundle: Path, access: str, command: list[str], stdin: str | None
@@ -183,7 +177,7 @@ class Sandbox:
             box.get("network", "none"),
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,size=64m",  # noqa: S108 - sandbox scratch, not a host secret path
+            "/tmp:rw,noexec,nosuid,size=64m",  # noqa: S108
             "--cap-drop",
             "ALL",
             "--security-opt",
@@ -219,7 +213,7 @@ class Sandbox:
         shown = f"docker run {shown} {box['image']} {' '.join(command)}"
         started = time.monotonic()
         try:
-            proc = subprocess.run(  # noqa: S603 - argv built above from licence + fixed paths
+            proc = subprocess.run(  # noqa: S603
                 cmd,
                 input=stdin,
                 capture_output=True,
@@ -227,8 +221,6 @@ class Sandbox:
                 timeout=box["timeout_seconds"],
                 check=False,
             )
-            # A result line used to be cut by keeping only the tail of stdout+stderr, which a
-            # large result could push out entirely ("exited 0 without a result").
             output = proc.stdout[-MAX_STDOUT:] + "\n" + proc.stderr[-MAX_OUTPUT:]
             return proc.returncode, output, round(time.monotonic() - started, 2), shown
         except subprocess.TimeoutExpired:

@@ -50,7 +50,6 @@ def arr(description=""):
     return {"type": "array", "items": {"type": "string"}, "description": description}
 
 
-# try 1: one tool doing two jobs; it used 3/3 attempts and never installed
 TRY1 = manifest(
     "parse_ci_test_failures",
     "Parse GitHub Actions pytest job logs for failing tests (file + test name per job) and list the aiohttp modules each failing test file imports",
@@ -64,7 +63,6 @@ TRY1 = manifest(
     },
     access="repository-read",
 )
-# try 2: the log parser, split out
 PARSER = manifest(
     "parse_ci_log_failures",
     "Parse a GitHub Actions job log and list every failing pytest test (FAILED/ERROR node ids) with the job name",
@@ -78,7 +76,6 @@ PARSER = manifest(
         "failures": arr("node ids of failing tests, deduplicated"),
     },
 )
-# try 2: the one tool that installed
 _installed = json.loads(
     (
         EVIDENCE / "registry" / "extract_aiohttp_imports" / "0.1.0" / "manifest.json"
@@ -200,7 +197,6 @@ def test_fn(name: str) -> str:
 SUMMARY_ASSERT = statement_at(BLIND3, 74)
 COUNT_ASSERT = statement_at(BLIND3, 58)
 
-# -- held-out: other repositories, written after the thresholds were fixed ------------------
 
 OMP_TASK = (
     "List the internal dependencies between the packages under packages/ (from each package.json), and give an order in which "
@@ -407,10 +403,6 @@ HELD_OUT = [
 ]
 
 
-# (set, id, point, manifest, installed, new_interface | (test function, assertion), expectations)
-# expectation: (question, "<=" or ">=", threshold); MARGIN is added on the far side.
-# "tuning" cases are the aiohttp run the thresholds were set from; "held-out" were written after
-# the thresholds were fixed and had never been sent to Jev.
 CASES = [
     (
         "tuning",
@@ -580,13 +572,14 @@ def main() -> None:
                 }
             )
         bands = (
-            # any check firing, acting or shadow: the evals decide which checks may act
             [("fires" if jev.judge_gate(r).checks else "build") for r in runs]
             if point == "gate"
             else []
         )
         passed = all(c["margin"] for c in checks)
-        for check in checks:  # per check kind, since the kernel lets each kind act or not
+        for (
+            check
+        ) in checks:
             kind = "dispute" if point == "dispute" else check["question"].split("::")[0]
             verdict.setdefault((subset, kind), []).append(check["margin"])
         rows.append(

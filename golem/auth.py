@@ -65,7 +65,7 @@ def challenge_for(verifier: str) -> str:
 
 
 def pkce_pair() -> tuple[str, str]:
-    verifier = secrets.token_urlsafe(64)  # 86 characters, inside RFC 7636's 43-128
+    verifier = secrets.token_urlsafe(64)
     return verifier, challenge_for(verifier)
 
 
@@ -114,7 +114,7 @@ def credits(key: str) -> dict:
     request = urllib.request.Request(
         CREDITS_URL, headers={"Authorization": f"Bearer {key}"}
     )
-    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - fixed https URL
+    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
         return json.loads(response.read().decode("utf-8")).get("data") or {}
 
 
@@ -197,14 +197,14 @@ def login(
 
 
 def _post(url: str, body: dict) -> dict:
-    request = urllib.request.Request(  # noqa: S310 - only called with EXCHANGE_URL
+    request = urllib.request.Request(  # noqa: S310
         url,
         data=json.dumps(body).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - fixed https URL
+        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise LoginError(

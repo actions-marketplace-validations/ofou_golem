@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Run Golem from its Docker image against a repository on this machine.
-#
-#   scripts/golem-docker login                      # OpenRouter login (headless: paste a code)
-#   scripts/golem-docker credits
-#   scripts/golem-docker REPO run "TASK" [--attach FILE ...]
-#   scripts/golem-docker REPO registry | verify | licence
-#
-# The key comes from OPENROUTER_API_KEY, else from the file `login` stores
-# (${XDG_CONFIG_HOME:-~/.config}/golem/openrouter.key, mode 0600). It is passed by name with -e,
-# so it never appears in a command line.
-#
-# The repository, every attached file's folder, and a work directory are mounted at the same
-# absolute paths inside the container, because the sandbox containers Golem starts on the host's
-# Docker mount those paths too. The Docker socket is mounted so Golem can start them; that gives
-# the Golem container control of the host's Docker, which is why it is kernel code only.
 set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Run Golem from its Docker image against a repository on this machine.
+
+  scripts/golem-docker login
+  scripts/golem-docker credits
+  scripts/golem-docker REPO run "TASK" [--attach FILE ...]
+  scripts/golem-docker REPO registry | verify | licence
+
+The key comes from OPENROUTER_API_KEY, else from the file `login` stores
+(${XDG_CONFIG_HOME:-~/.config}/golem/openrouter.key, mode 0600). It is passed by name with -e,
+so it never appears in a command line.
+
+The repository, every attached file's folder, and a work directory are mounted at the same
+absolute paths inside the container, because the sandbox containers Golem starts on the host's
+Docker mount those paths too. The Docker socket is mounted so Golem can start them; that gives
+the Golem container control of the host's Docker, which is why it is kernel code only.
+EOF
+}
 
 IMAGE="${GOLEM_IMAGE:-golem:local}"
 config="${XDG_CONFIG_HOME:-$HOME/.config}/golem"
@@ -25,14 +30,13 @@ fi
 
 case "${1:-}" in
   login)
-    # Runs as you, so the stored key file is yours; headless, so no port has to reach the container.
     mkdir -p "$config" && chmod 700 "$config"
     exec docker run --rm -it --user "$(id -u):$(id -g)" -e HOME=/tmp -e XDG_CONFIG_HOME=/config \
       -v "$config:/config/golem" "$IMAGE" login --headless ;;
   credits)
     exec docker run --rm -e OPENROUTER_API_KEY "$IMAGE" credits ;;
   ""|-h|--help)
-    sed -n '2,15p' "$0"; exit 2 ;;
+    usage; exit 2 ;;
 esac
 
 repo="$(cd "$1" && pwd)"; shift

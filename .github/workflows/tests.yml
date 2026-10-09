@@ -1,6 +1,3 @@
-# Ruff (including S rules), pyright, then pytest with coverage, on every push and pull request.
-# The installed wheel is checked to carry the same licence. Sandbox tests use a real container.
-# No secrets: the three live Jev tests skip without OPENROUTER_API_KEY.
 name: tests
 on:
   push:
@@ -14,17 +11,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           python-version: "3.13"
       - name: Install Golem and the dev group
         run: uv sync --no-editable
       - name: The installed package carries the same licence
         run: |
-          # uv run re-syncs as editable by default; call the wheel entry point directly.
           cd "$RUNNER_TEMP"
           "$GITHUB_WORKSPACE/.venv/bin/golem" licence | tail -1
           test "$("$GITHUB_WORKSPACE/.venv/bin/golem" licence | tail -1 | cut -d' ' -f2)" = "$(sha256sum "$GITHUB_WORKSPACE/authority.json" | cut -d' ' -f1)"
