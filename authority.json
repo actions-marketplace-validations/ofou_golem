@@ -74,7 +74,7 @@
     "timeout_seconds": 120
   },
   "budget": {
-    "max_usd_per_task": 0.20,
+    "max_usd_per_task": 0.2,
     "max_sessions_per_task": 3,
     "max_steps_per_session": 18,
     "max_make_tool_per_task": 4,
@@ -82,14 +82,8 @@
     "max_sandbox_calls_per_task": 60
   },
   "models": {
-    "builder": "openrouter/free",
-    "tester": "openrouter/pareto-code",
-    "tester_plugins": [
-      {
-        "id": "pareto-router",
-        "min_coding_score": 0.25
-      }
-    ],
+    "builder": "deepseek/deepseek-v4.1-flash",
+    "tester": "deepseek/deepseek-v4.1-flash",
     "advisor": "typesafe/jev-1.13"
   }
 }
