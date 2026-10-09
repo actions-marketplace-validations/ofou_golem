@@ -353,3 +353,27 @@ class LoopTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BlindBriefTest(unittest.TestCase):
+    def test_a_registry_read_tool_brief_carries_the_export_format(self):
+        sent = {}
+
+        class Result:
+            async def get_text(self):
+                return "```python\nimport unittest\nfrom tool import run\n```"
+
+        def fake_call(_client, request):
+            sent.update(request)
+            return Result()
+
+        manifest = dict(args(access="registry-read"), name="registry_report")
+        with mock.patch.object(tester, "call_model", new=fake_call):
+            asyncio.run(
+                tester.write_blind_tests(None, "m", manifest, TASK, [], 0.01, None)
+            )
+        self.assertIn("is inside its manifest", sent["input"])
+        sent.clear()
+        with mock.patch.object(tester, "call_model", new=fake_call):
+            asyncio.run(tester.write_blind_tests(None, "m", args(), TASK, [], 0.01, None))
+        self.assertNotIn("registry_export_format", sent["input"])
