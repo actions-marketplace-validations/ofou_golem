@@ -387,7 +387,7 @@ async def _make_tool(run: Run, args: dict) -> dict:
                     reasoning=run.licence.data["models"].get("tester_reasoning"),
                 )
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(f"{type(exc).__name__}: {str(exc)[:300]}")
                 run.say(
                     "blind",
@@ -582,7 +582,7 @@ async def _settle_disputes(
                 plugins=run.licence.data["models"].get("tester_plugins"),
                 reasoning=run.licence.data["models"].get("tester_reasoning"),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             review = {
                 "verdict": "keep",
                 "why": f"review failed ({type(exc).__name__}), so the test stays",

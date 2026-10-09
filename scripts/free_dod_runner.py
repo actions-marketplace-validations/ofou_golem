@@ -391,7 +391,7 @@ def _write_truth(repo: Repo, dest: Path, sha: str, truth_dir: Path) -> None:
                 "task_index": index,
             }
             payload.update(_truth_for_kind(repo, dest, kind))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             payload = {
                 "name": repo.name,
                 "sha": sha,
@@ -917,7 +917,7 @@ def _run_all(
             name = futures[future]
             try:
                 row = future.result()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 row = {
                     "name": name,
                     "status": "failed",

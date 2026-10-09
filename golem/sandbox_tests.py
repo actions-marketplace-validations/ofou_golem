@@ -4,6 +4,7 @@ prints the usual verbose output followed by one machine-readable result line.
 This file is mounted read-only at /golem/tests.py. It is kernel code, not generated code.
 """
 
+import contextlib
 import json
 import sys
 import traceback
@@ -99,10 +100,8 @@ def _check_outputs_against_schema() -> None:
 def main() -> None:
     pattern = sys.argv[1] if len(sys.argv) > 1 else "test_*.py"
     sys.path.insert(0, "/tool")
-    try:
+    with contextlib.suppress(Exception):
         _check_outputs_against_schema()
-    except Exception:  # noqa: BLE001, S110 - a broken tool.py fails in the tests themselves
-        pass
     suite = unittest.TestLoader().discover(
         "/tool", pattern=pattern, top_level_dir="/tool"
     )
