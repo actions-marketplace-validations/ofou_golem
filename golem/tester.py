@@ -195,6 +195,29 @@ async def write_blind_tests(
     return code + "\n"
 
 
+def calls_in(suite: str, test_name: str, limit: int = 3) -> list[str]:
+    """The run(...) calls one test makes, as source: the inputs a failing blind test used,
+    without the values it expects. Told only "test_blind_04: AssertionError", a builder
+    cannot tell that the test called run({"only": []}), and spent three attempts guessing."""
+    try:
+        tree = ast.parse(suite)
+    except SyntaxError:
+        return []
+    calls = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == test_name:
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Call)
+                    and isinstance(sub.func, ast.Name)
+                    and sub.func.id == "run"
+                ):
+                    text = ast.unparse(sub)[:300]
+                    if text not in calls:
+                        calls.append(text)
+    return calls[:limit]
+
+
 def anonymize(suite: str) -> tuple[str, dict]:
     """Rename every test method to test_blind_NN and drop docstrings and comments. The builder
     only ever sees failing test names, and a name like test_most_imported_is_tools_registry

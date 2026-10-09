@@ -208,6 +208,16 @@ class LoopTest(unittest.TestCase):
             made["your_test_failures"],
         )
 
+    def test_arguments_the_input_schema_forbids_are_refused_in_testing(self):
+        strict = dict(args()["input_schema"], additionalProperties=False)
+        refuses = OWN_TESTS + (
+            "    def test_unknown_argument(self):\n"
+            "        with self.assertRaises(ValueError):\n"
+            '            run({"log_file": "build.log", "extra": 1})\n'
+        )
+        made = self.make(input_schema=strict, tests=refuses)
+        self.assertEqual(made["status"], "passed", made)
+
     def test_failing_implementation_is_not_installable(self):
         made = self.make(
             code=CODE.replace('"failures": len(names)', '"failures": len(names) + 1')
@@ -270,7 +280,11 @@ class LoopTest(unittest.TestCase):
         )
         self.assertEqual(made["status"], "failed")
         self.assertIn(
-            {"test": "test_blind_01", "error": "AssertionError"},
+            {
+                "test": "test_blind_01",
+                "error": "AssertionError",
+                "calls": ["run({'log_file': 'build.log'})"],
+            },
             made["blind_test_failures"],
         )
         self.assertNotIn("3 != 2", json.dumps(made["blind_test_failures"]))
